@@ -1,6 +1,6 @@
 @{
     RootModule = 'VSCodeSettingDSC.psm1'
-    ModuleVersion = '0.1.0'
+    ModuleVersion = '0.1.1'
     GUID = 'f7130979-5a5c-4819-be55-863802e1ab0a'
     Author = 'Gijs Reijn'
     Description = 'DSC Resource for Visual Studio Code Settings'
@@ -110,9 +110,9 @@
         LicenseUri = 'https://github.com/Gijsreyn/random-tools-gijs/LICENSE'
 
         # A URL to the main website for this project.
-        ProjectUri   = 'https://github.com/Gijsreyn/random-tools-gijs/powershell/modules/VSCodeSettingDSC'
+        ProjectUri   = 'https://github.com/Gijsreyn/random-tools-gijs/tree/main/powershell/modules/VSCodeSettingDSC'
 
         # A URL to an icon representing this module.
-        IconUri = 'https://raw.githubusercontent.com/Gijsreyn/random-tools-gijs/main/.images/vscodesettingdsc.png'
+        IconUri = 'https://raw.githubusercontent.com/Gijsreyn/random-tools-gijs/main/powershell/modules/VSCodeSettingDSC/.images/vscodesettingdsc.png'
     }
 }
