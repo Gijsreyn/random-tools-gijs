@@ -4,7 +4,7 @@
 
 Visual Studio Code has two options to configure settings. Either through the user interface or modifying the `settings.json`. The `settings.json` can be workspace or user specific. User specific settings are stored in `$env:APPDATA\Roaming\Code\User\settings.json`.
 
-Using the `VSCodeSettingDSC` module, always manipulation in the `settings.json` file through a `configuration`.
+Using the `VSCodeSettingDSC` module, allows direct manipulation in the `settings.json` file through a `configuration`.
 
 ## Features
 
