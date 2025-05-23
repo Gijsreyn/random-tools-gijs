@@ -1,0 +1,9 @@
+try:
+    # Define the path to the file in ADLS Gen2
+    file_path = "_REPLACEME_"
+   
+    # Read the file as a text file
+    df = spark.read.text(file_path)
+except Exception as e:
+    print(f"Error occurred: {e}")
+    raise

@@ -1,0 +1,38 @@
+{
+  "cluster_name": "testCase1",
+  "spark_version": "15.4.x-scala2.12",
+  "spark_conf": {
+    "spark.master": "local[*, 4]",
+    "spark.databricks.cluster.profile": "singleNode"
+  },
+  "azure_attributes": {
+    "first_on_demand": 1,
+    "availability": "SPOT_WITH_FALLBACK_AZURE",
+    "spot_bid_max_price": -1.0
+  },
+  "node_type_id": "Standard_DS3_v2",
+  "driver_node_type_id": "Standard_DS3_v2",
+  "custom_tags": {
+    "ResourceClass": "SingleNode"
+  },
+  "spark_env_vars": {
+    "PYSPARK_PYTHON": "/databricks/python3/bin/python3"
+  },
+  "autotermination_minutes": 60,
+  "enable_elastic_disk": true,
+  "enable_local_disk_encryption": false,
+  "instance_source": {
+    "node_type_id": "Standard_DS3_v2"
+  },
+  "driver_instance_source": {
+    "node_type_id": "Standard_DS3_v2"
+  },
+  "data_security_mode": "SINGLE_USER",
+  "runtime_engine": "PHOTON",
+  "effective_spark_version": "15.4.x-photon-scala2.12",
+  "num_workers": 2,
+  "default_tags": {
+    "Vendor": "Databricks"
+  },
+  "init_scripts_safe_mode": false
+}
