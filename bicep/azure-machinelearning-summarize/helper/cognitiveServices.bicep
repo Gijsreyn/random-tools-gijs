@@ -2,8 +2,8 @@ module account 'br/public:avm/res/cognitive-services/account:0.10.2' = {
   name: 'accountDeployment'
   params: {
     kind: 'AIServices'
-    name: 'csad002'
-    customSubDomainName: 'xcsadai'
+    name: 'aissummarizecontent'
+    customSubDomainName: 'aissummarizecontent'
     publicNetworkAccess: 'Enabled'
     disableLocalAuth: false
     deployments: [
