@@ -4,8 +4,10 @@ param (
 )
 
 $script:toolDirectory = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) 'tools'
+$script:testCaseDirectory = Join-Path (Split-Path $PSScriptRoot -Parent) 'testcases'
 
 Write-Verbose -Message "Storing tools in: '$toolDirectory'" -Verbose
+Write-Verbose -Message "Test cases directory: '$testCaseDirectory'" -Verbose
 
 BeforeDiscovery {
     $OldPSModulePath = $env:PSModulePath
@@ -17,12 +19,14 @@ BeforeDiscovery {
         }
         Save-PSResource -Name 'DatabricksPS' -Path $toolDirectory -TrustRepository -Repository PSGallery
     }
+
+    # Always authenticate first
+    Set-DatabricksEnvironment -AzureResourceID $AzureResourceID -UsingAzContext
 }
 
 Describe "Cluster integration tests" {
     Context "Connectivity" {
-        It "Should authenticate to Databricks" {
-            Set-DatabricksEnvironment -AzureResourceID $AzureResourceID -UsingAzContext
+        It "Should be able to authenticate to Databricks and get the workspace configuration" {
             $workspace = Get-DatabricksWorkspaceConfig
             $workspace | Should -Not -BeNullOrEmpty
         }
@@ -59,70 +63,86 @@ Describe "Cluster integration tests" {
     }
 
     Context "Workflow execution" {
-        It 'Should be able to run a notebook in a job workflow on the cluster ' {
-            BeforeDiscovery {
-                $clusterConfig = Join-Path (Split-Path $PSScriptRoot -Parent) 'testcases/testCase1ClusterConfig.json'
-                $script:clusterConfiguration = Get-Content $clusterConfig | ConvertFrom-Json -AsHashtable
+        BeforeDiscovery {
+            $unityExternalLocation = Get-UnityCatalogExternalLocation
 
-                $clusters = Get-DatabricksCluster
-                $cluster = $clusters | Where-Object { $_.cluster_name -in $clusterConfiguration.cluster_name } | Select-Object -First 1
-                if (!$cluster) {
-                    Write-Verbose -Message "Creating cluster $($clusterConfiguration.cluster_name)" -Verbose
-                    $functionInput = @{
-                        Method   = 'Post'
-                        Body     = $clusterConfiguration
-                        EndPoint = '2.1/clusters/create'
-                    }
-                    $res = Invoke-DatabricksApiRequest @functionInput
+            # Start the cluster
+            $clusterConfig = Join-Path $testCaseDirectory 'testCase1ClusterConfig.json'
+            $clusterConfiguration = Get-Content $clusterConfig | ConvertFrom-Json -AsHashtable
 
-                    $cluster = Get-DatabricksCluster -ClusterID $res.cluster_id
+            $clusters = Get-DatabricksCluster
+            $cluster = $clusters | Where-Object { $_.cluster_name -in $clusterConfiguration.cluster_name } | Select-Object -First 1
+            if (!$cluster) {
+                Write-Verbose -Message "Creating cluster $($clusterConfiguration.cluster_name)" -Verbose
+                $functionInput = @{
+                    Method   = 'Post'
+                    Body     = $clusterConfiguration
+                    EndPoint = '2.1/clusters/create'
                 }
+                $res = Invoke-DatabricksApiRequest @functionInput
 
-                if ($cluster.state -ne 'RUNNING') {
-                    Write-Verbose -Message "Starting cluster $($clusterConfiguration.cluster_name)" -Verbose
-                    $functionInput = @{
-                        Method   = 'Post'
-                        Body     = @{
-                            cluster_id = $cluster.cluster_id
-                        }
-                        EndPoint = '2.1/clusters/start'
-                    }
-                    Write-Verbose -Message ($functionInput | ConvertTo-Json -Depth 10) -Verbose
-                    # Sometimes the cluster is in pending state and we only need to wait for it to start
-                    try {
-                        Invoke-DatabricksApiRequest @functionInput -ErrorAction Stop     
-                    }
-                    catch {
-                        Write-Warning -Message "Failed to start cluster $($clusterConfiguration.cluster_name). Error: $($_.Exception.Message)"
-                    }
-
-                    do {
-                        Write-Verbose -Message 'Waiting for cluster to start' -Verbose
-                        Start-Sleep -Seconds 30
-                        $cluster = Get-DatabricksCluster -ClusterID $cluster.cluster_id
-                        Write-Verbose -Message "Cluster state: $($cluster.state)" -Verbose
-                    } while ($cluster.state -ne 'RUNNING')
-                }
+                $cluster = Get-DatabricksCluster -ClusterID $res.cluster_id
             }
+
+            if ($cluster.state -ne 'RUNNING') {
+                Write-Verbose -Message "Starting cluster $($clusterConfiguration.cluster_name)" -Verbose
+                $functionInput = @{
+                    Method   = 'Post'
+                    Body     = @{
+                        cluster_id = $cluster.cluster_id
+                    }
+                    EndPoint = '2.1/clusters/start'
+                }
+                Write-Verbose -Message ($functionInput | ConvertTo-Json -Depth 10) -Verbose
+                # Sometimes the cluster is in pending state and we only need to wait for it to start
+                try {
+                    Invoke-DatabricksApiRequest @functionInput -ErrorAction Stop     
+                }
+                catch {
+                    Write-Warning -Message "Failed to start cluster $($clusterConfiguration.cluster_name). Error: $($_.Exception.Message)"
+                }
+
+                do {
+                    Write-Verbose -Message 'Waiting for cluster to start' -Verbose
+                    Start-Sleep -Seconds 30
+                    $cluster = Get-DatabricksCluster -ClusterID $cluster.cluster_id
+                    Write-Verbose -Message "Cluster state: $($cluster.state)" -Verbose
+                } while ($cluster.state -ne 'RUNNING')
+            }
+        }
+
+        It 'Should be able to run testCase1 in a job workflow on the cluster using : <_.name>' -ForEach $unityExternalLocation {
+            
             # Create a new directory to load data in
             Add-DatabricksWorkspaceDirectory -Path '/testcases'
 
             # Import the item
             $localPath = Join-Path (Split-Path $PSScriptRoot -Parent) 'testcases/testCase1.txt'
 
+            $content = Get-Content $localPath -Raw
+            $content = $content -replace '_REPLACEME_', $_.url 
+
+            $newPath = Join-Path $testDrive 'testCase1.txt'
+            $content | Set-Content -Path $newPath -Force
+
             $importParams = @{
                 Path      = '/testcases/testCase1'
                 Format    = 'SOURCE'
                 Language  = 'PYTHON'
                 Overwrite = $true
-                LocalPath = $localPath
+                LocalPath = $newPath
             }
             Write-Verbose -Message "Importing $localPath with" -Verbose
             Write-Verbose -Message ($importParams | ConvertTo-Json -Depth 10 | Out-String) -Verbose
             Import-DatabricksWorkspaceItem @importParams | Out-Null
 
             # Add databricks job pointing to the notebook
-            # TODO: Should replace a real storage account to test the external location
+            $clusterConfig = Join-Path $testCaseDirectory 'testCase1ClusterConfig.json'
+            $clusterConfiguration = Get-Content $clusterConfig | ConvertFrom-Json -AsHashtable
+
+            $clusters = Get-DatabricksCluster
+            $cluster = $clusters | Where-Object { $_.cluster_name -in $clusterConfiguration.cluster_name } | Select-Object -First 1
+            
             Write-Verbose -Message 'Adding job to run the notebook' -Verbose
             $job = Add-DatabricksJob -Name 'testcase1' -NotebookPath '/Workspace/testcases/testCase1' -ClusterID $cluster.cluster_id
         
@@ -145,9 +165,10 @@ Describe "Cluster integration tests" {
         }
 
         AfterAll {
-            Get-DatabricksJob | Where-Object { $_.settings.name -eq 'testcase1' } | Remove-DatabricksJob
-            Remove-DatabricksWorkspaceItem -Path '/testcases/testCase1' -Recursive $true
+            # Get-DatabricksJob | Where-Object { $_.settings.name -eq 'testcase1' } | Remove-DatabricksJob
+            # Remove-DatabricksWorkspaceItem -Path '/testcases/testCase1' -Recursive $true
 
+            # Uncomment the following line to remove the cluster after the test
             # Get-DatabricksCluster | Where-Object { $_.cluster_name -eq $clusterConfiguration.cluster_name } | Remove-DatabricksCluster
         }
     }
