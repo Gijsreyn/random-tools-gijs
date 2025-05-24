@@ -165,8 +165,8 @@ Describe "Cluster integration tests" {
         }
 
         AfterAll {
-            # Get-DatabricksJob | Where-Object { $_.settings.name -eq 'testcase1' } | Remove-DatabricksJob
-            # Remove-DatabricksWorkspaceItem -Path '/testcases/testCase1' -Recursive $true
+            Get-DatabricksJob | Where-Object { $_.settings.name -eq 'testcase1' } | Remove-DatabricksJob
+            Remove-DatabricksWorkspaceItem -Path '/testcases/testCase1' -Recursive $true
 
             # Uncomment the following line to remove the cluster after the test
             # Get-DatabricksCluster | Where-Object { $_.cluster_name -eq $clusterConfiguration.cluster_name } | Remove-DatabricksCluster
