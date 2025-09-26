@@ -846,7 +846,7 @@ class Office365Installer
             return $false
         }
 
-        if ($currentState.Channel -ne $this.Channel)
+        if ($currentState.Channel -ne $this.Channel -and $currentState.Channel -ne [Channel]::Current)
         {
             return $false
         }

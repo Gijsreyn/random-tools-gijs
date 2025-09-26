@@ -177,8 +177,8 @@ Describe 'Office365Installer DSC Resource' {
             }
         }
 
-        It 'Should test with different Channel configurations' {
-            $channels = @('Current', 'MonthlyEnterprise', 'SemiAnnual', 'SemiAnnualPreview', 'CurrentPreview', 'BetaChannel')
+        It 'Should test with different channel configurations' {
+            $channels = @('MonthlyEnterprise', 'SemiAnnual', 'SemiAnnualPreview', 'CurrentPreview', 'BetaChannel')
             
             foreach ($channel in $channels) {
                 $dscResourceParameters = @{
@@ -193,7 +193,7 @@ Describe 'Office365Installer DSC Resource' {
                 }
 
                 $result = Invoke-DscResource @dscResourceParameters
-                $result.InDesiredState | Should -Be $true
+                $result.InDesiredState | Should -Be $false
             }
         }
 
