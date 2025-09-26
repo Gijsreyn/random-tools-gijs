@@ -1,0 +1,28 @@
+name: OfficeDsc CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Install Pester
+      shell: pwsh
+      run: |
+        Write-Host "Installing Pester..."
+        Install-PSResource -Name Pester -Repository PSGallery -TrustRepository -ReInstall -Version 5.7.1 -Scope AllUsers
+
+    - name: Run Pester tests
+      shell: pwsh
+      run: |
+        $env:PSModulePath += ";$PWD/powershell/modules"
+        Write-Host "Running Pester tests..."
+        Invoke-Pester -Path "$PWD/tests" -CI -Output Detailed
