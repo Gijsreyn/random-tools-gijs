@@ -261,9 +261,9 @@ Describe 'Office365Installer DSC Resource' {
 
             Invoke-DscResource @dscResourceParameters
 
-            $dscResourceParameters.Method = 'Test'
+            $dscResourceParameters.Method = 'Get'
             $result = Invoke-DscResource @dscResourceParameters
-            $result.InDesiredState | Should -Be $true
+            $result.Exist | Should -Be $true
             $result.Channel | Should -Be 'Current'
             $result.ProductId | Should -Be 'O365ProPlusRetail'
             $result.ExcludeApps | Should -Be @()
@@ -283,9 +283,9 @@ Describe 'Office365Installer DSC Resource' {
 
             Invoke-DscResource @dscResourceParameters
 
-            $dscResourceParameters.Method = 'Test'
+            $dscResourceParameters.Method = 'Get'
             $result = Invoke-DscResource @dscResourceParameters
-            $result.InDesiredState | Should -Be $true
+            $result.Exist | Should -Be $false
         }
 
         It 'Should validate ODT path before attempting installation' -Skip:(-not $script:isElevated) {
@@ -303,88 +303,4 @@ Describe 'Office365Installer DSC Resource' {
             { Invoke-DscResource @dscResourceParameters } | Should -Throw '*does not exist*'
         }
     }
-
-    # Context 'Integration Tests with Complex Configurations' {
-    #     It 'Should handle complete Office 365 Pro Plus configuration' {
-    #         $dscResourceParameters = @{
-    #             ModuleName = 'OfficeDsc'
-    #             Name = 'Office365Installer'
-    #             Method = 'Get'
-    #             Property = @{
-    #                 Path = $script:mockOdtPath
-    #                 ProductId = 'O365ProPlusRetail'
-    #                 Channel = 'MonthlyEnterprise'
-    #                 ExcludeApps = @('Teams', 'OneNote', 'Access')
-    #                 LanguageId = @('en-US', 'fr-FR', 'de-DE')
-    #                 Exist = $true
-    #             }
-    #         }
-
-    #         $result = Invoke-DscResource @dscResourceParameters
-            
-    #         $result | Should -Not -BeNullOrEmpty
-    #         $result.Path | Should -Be $script:mockOdtPath
-    #         $result.ProductId | Should -Be 'O365ProPlusRetail'
-    #     }
-
-    #     It 'Should handle Office 365 Business configuration' {
-    #         $dscResourceParameters = @{
-    #             ModuleName = 'OfficeDsc'
-    #             Name = 'Office365Installer'
-    #             Method = 'Get'
-    #             Property = @{
-    #                 Path = $script:mockOdtPath
-    #                 ProductId = 'O365BusinessRetail'
-    #                 Channel = 'Current'
-    #                 ExcludeApps = @('Teams')
-    #                 LanguageId = @('en-US')
-    #                 Exist = $true
-    #             }
-    #         }
-
-    #         $result = Invoke-DscResource @dscResourceParameters
-            
-    #         $result | Should -Not -BeNullOrEmpty
-    #         $result.ProductId | Should -Be 'O365BusinessRetail'
-    #     }
-
-    #     It 'Should handle minimal configuration with defaults' {
-    #         $dscResourceParameters = @{
-    #             ModuleName = 'OfficeDsc'
-    #             Name = 'Office365Installer'
-    #             Method = 'Get'
-    #             Property = @{
-    #                 Path = $script:mockOdtPath
-    #             }
-    #         }
-
-    #         $result = Invoke-DscResource @dscResourceParameters
-            
-    #         $result | Should -Not -BeNullOrEmpty
-    #         $result.Path | Should -Be $script:mockOdtPath
-    #         $result.ProductId | Should -Be 'O365ProPlusRetail'
-    #         $result.Channel | Should -Be 'Current'
-    #         $result.ExcludeApps | Should -Be @()
-    #         $result.Exist | Should -Be $false
-    #     }
-
-    #     It 'Should test complete configuration for desired state' {
-    #         $dscResourceParameters = @{
-    #             ModuleName = 'OfficeDsc'
-    #             Name = 'Office365Installer'
-    #             Method = 'Test'
-    #             Property = @{
-    #                 Path = $script:mockOdtPath
-    #                 ProductId = 'O365ProPlusEEANoTeamsRetail'
-    #                 Channel = 'SemiAnnual'
-    #                 ExcludeApps = @('OneNote', 'Publisher')
-    #                 LanguageId = @('en-GB', 'fr-FR')
-    #                 Exist = $false
-    #             }
-    #         }
-
-    #         $result = Invoke-DscResource @dscResourceParameters
-    #         $result.InDesiredState | Should -BeOfType [System.Boolean]
-    #     }
-    # }
 }
