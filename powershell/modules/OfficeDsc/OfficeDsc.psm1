@@ -846,7 +846,8 @@ class Office365Installer
             return $false
         }
 
-        if ($currentState.Channel -ne $this.Channel -and $currentState.Channel -ne [Channel]::Current)
+        # default channel is Current, so if the current state is different, return false
+        if ($currentState.Channel -ne $this.Channel -or $currentState.Channel -ne [Channel]::Current)
         {
             return $false
         }

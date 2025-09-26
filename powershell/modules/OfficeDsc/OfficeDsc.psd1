@@ -13,7 +13,7 @@
         PSData = @{
             # Tags applied to this module. These help with module discovery in online galleries.
             Tags       = @(
-                'PSDscResource_Office365Installer'
+                'Office', 'DSC', 'Office365'
             )
 
             LicenseUri = 'https://github.com/Gijsreyn/random-tools-gijs/LICENSE'
