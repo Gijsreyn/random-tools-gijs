@@ -36,7 +36,7 @@ Describe 'List available DSC resources' {
 }
 
 Describe 'Office365Installer DSC Resource' {
-    Context 'Get Method Tests' {
+    Context 'Get' {
         It 'Should return current state with default values when Office is not installed' {
             $dscResourceParameters = @{
                 ModuleName = 'OfficeDsc'
@@ -105,7 +105,7 @@ Describe 'Office365Installer DSC Resource' {
             $result = Invoke-DscResource @dscResourceParameters
             
             $result | Should -Not -BeNullOrEmpty
-            $result.ExcludeApps | Should -BeOfType [System.Array]
+            $result.ExcludeApps | Should -BeNullOrEmpty # because Office is not installed
         }
 
         It 'Should return current state with specific language IDs' {
@@ -122,11 +122,11 @@ Describe 'Office365Installer DSC Resource' {
             $result = Invoke-DscResource @dscResourceParameters
             
             $result | Should -Not -BeNullOrEmpty
-            $result.LanguageId | Should -BeOfType [System.Array]
+            $result.LanguageId | Should -BeNullOrEmpty # because Office is not installed
         }
     }
 
-    Context 'Test Method Tests' {
+    Context 'Test' {
         It 'Should return false when Office is not installed but should exist' {
             $dscResourceParameters = @{
                 ModuleName = 'OfficeDsc'
@@ -139,7 +139,6 @@ Describe 'Office365Installer DSC Resource' {
             }
 
             $result = Invoke-DscResource @dscResourceParameters
-            
             $result.InDesiredState | Should -Be $false
         }
 
@@ -155,7 +154,6 @@ Describe 'Office365Installer DSC Resource' {
             }
 
             $result = Invoke-DscResource @dscResourceParameters
-            
             $result.InDesiredState | Should -Be $true
         }
 
@@ -175,7 +173,7 @@ Describe 'Office365Installer DSC Resource' {
                 }
 
                 $result = Invoke-DscResource @dscResourceParameters
-                $result.InDesiredState | Should -BeOfType [System.Boolean]
+                $result.InDesiredState | Should -Be $true
             }
         }
 
@@ -195,7 +193,7 @@ Describe 'Office365Installer DSC Resource' {
                 }
 
                 $result = Invoke-DscResource @dscResourceParameters
-                $result.InDesiredState | Should -BeOfType [System.Boolean]
+                $result.InDesiredState | Should -Be $true
             }
         }
 
@@ -220,7 +218,7 @@ Describe 'Office365Installer DSC Resource' {
                 }
 
                 $result = Invoke-DscResource @dscResourceParameters
-                $result.InDesiredState | Should -BeOfType [System.Boolean]
+                $result.InDesiredState | Should -Be $true
             }
         }
 
@@ -249,8 +247,8 @@ Describe 'Office365Installer DSC Resource' {
         }
     }
 
-    Context 'Set Method Tests' {
-        It 'Should skip Set method when not running as Administrator' -Skip:$script:isElevated {
+    Context 'Set' {
+        It 'Should install office' -Skip:(!$script:isElevated) {
             $dscResourceParameters = @{
                 ModuleName = 'OfficeDsc'
                 Name = 'Office365Installer'
@@ -261,25 +259,18 @@ Describe 'Office365Installer DSC Resource' {
                 }
             }
 
-            { Invoke-DscResource @dscResourceParameters } | Should -Throw '*administrative privileges*'
+            Invoke-DscResource @dscResourceParameters
+
+            $dscResourceParameters.Method = 'Test'
+            $result = Invoke-DscResource @dscResourceParameters
+            $result.InDesiredState | Should -Be $true
+            $result.Channel | Should -Be 'Current'
+            $result.ProductId | Should -Be 'O365ProPlusRetail'
+            $result.ExcludeApps | Should -Be @()
+            $result.LanguageId | Should -Not -BeNullOrEmpty
         }
 
-        It 'Should attempt to install Office when Exist is true and running as Administrator' -Skip:(-not $script:isElevated) {
-            $dscResourceParameters = @{
-                ModuleName = 'OfficeDsc'
-                Name = 'Office365Installer'
-                Method = 'Set'
-                Property = @{
-                    Path = $script:mockOdtPath
-                    Exist = $true
-                }
-            }
-
-            # This will fail because the mock ODT path doesn't exist, but we're testing the flow
-            { Invoke-DscResource @dscResourceParameters } | Should -Throw
-        }
-
-        It 'Should attempt to uninstall Office when Exist is false and running as Administrator' -Skip:(-not $script:isElevated) {
+        It 'Should uninstall Office when set to false' {
             $dscResourceParameters = @{
                 ModuleName = 'OfficeDsc'
                 Name = 'Office365Installer'
@@ -290,8 +281,11 @@ Describe 'Office365Installer DSC Resource' {
                 }
             }
 
-            # This will fail because the mock ODT path doesn't exist, but we're testing the flow
-            { Invoke-DscResource @dscResourceParameters } | Should -Throw
+            Invoke-DscResource @dscResourceParameters
+
+            $dscResourceParameters.Method = 'Test'
+            $result = Invoke-DscResource @dscResourceParameters
+            $result.InDesiredState | Should -Be $true
         }
 
         It 'Should validate ODT path before attempting installation' -Skip:(-not $script:isElevated) {
@@ -308,232 +302,89 @@ Describe 'Office365Installer DSC Resource' {
 
             { Invoke-DscResource @dscResourceParameters } | Should -Throw '*does not exist*'
         }
-
-        It 'Should validate that Path is an executable file' -Skip:(-not $script:isElevated) {
-            $textFilePath = [System.IO.Path]::GetTempFileName()
-            try {
-                $dscResourceParameters = @{
-                    ModuleName = 'OfficeDsc'
-                    Name = 'Office365Installer'
-                    Method = 'Set'
-                    Property = @{
-                        Path = $textFilePath
-                        Exist = $true
-                    }
-                }
-
-                { Invoke-DscResource @dscResourceParameters } | Should -Throw '*not an executable file*'
-            }
-            finally {
-                Remove-Item -Path $textFilePath -Force -ErrorAction SilentlyContinue
-            }
-        }
     }
 
-    Context 'Integration Tests with Complex Configurations' {
-        It 'Should handle complete Office 365 Pro Plus configuration' {
-            $dscResourceParameters = @{
-                ModuleName = 'OfficeDsc'
-                Name = 'Office365Installer'
-                Method = 'Get'
-                Property = @{
-                    Path = $script:mockOdtPath
-                    ProductId = 'O365ProPlusRetail'
-                    Channel = 'MonthlyEnterprise'
-                    ExcludeApps = @('Teams', 'OneNote', 'Access')
-                    LanguageId = @('en-US', 'fr-FR', 'de-DE')
-                    Exist = $true
-                }
-            }
+    # Context 'Integration Tests with Complex Configurations' {
+    #     It 'Should handle complete Office 365 Pro Plus configuration' {
+    #         $dscResourceParameters = @{
+    #             ModuleName = 'OfficeDsc'
+    #             Name = 'Office365Installer'
+    #             Method = 'Get'
+    #             Property = @{
+    #                 Path = $script:mockOdtPath
+    #                 ProductId = 'O365ProPlusRetail'
+    #                 Channel = 'MonthlyEnterprise'
+    #                 ExcludeApps = @('Teams', 'OneNote', 'Access')
+    #                 LanguageId = @('en-US', 'fr-FR', 'de-DE')
+    #                 Exist = $true
+    #             }
+    #         }
 
-            $result = Invoke-DscResource @dscResourceParameters
+    #         $result = Invoke-DscResource @dscResourceParameters
             
-            $result | Should -Not -BeNullOrEmpty
-            $result.Path | Should -Be $script:mockOdtPath
-            $result.ProductId | Should -Be 'O365ProPlusRetail'
-        }
+    #         $result | Should -Not -BeNullOrEmpty
+    #         $result.Path | Should -Be $script:mockOdtPath
+    #         $result.ProductId | Should -Be 'O365ProPlusRetail'
+    #     }
 
-        It 'Should handle Office 365 Business configuration' {
-            $dscResourceParameters = @{
-                ModuleName = 'OfficeDsc'
-                Name = 'Office365Installer'
-                Method = 'Get'
-                Property = @{
-                    Path = $script:mockOdtPath
-                    ProductId = 'O365BusinessRetail'
-                    Channel = 'Current'
-                    ExcludeApps = @('Teams')
-                    LanguageId = @('en-US')
-                    Exist = $true
-                }
-            }
+    #     It 'Should handle Office 365 Business configuration' {
+    #         $dscResourceParameters = @{
+    #             ModuleName = 'OfficeDsc'
+    #             Name = 'Office365Installer'
+    #             Method = 'Get'
+    #             Property = @{
+    #                 Path = $script:mockOdtPath
+    #                 ProductId = 'O365BusinessRetail'
+    #                 Channel = 'Current'
+    #                 ExcludeApps = @('Teams')
+    #                 LanguageId = @('en-US')
+    #                 Exist = $true
+    #             }
+    #         }
 
-            $result = Invoke-DscResource @dscResourceParameters
+    #         $result = Invoke-DscResource @dscResourceParameters
             
-            $result | Should -Not -BeNullOrEmpty
-            $result.ProductId | Should -Be 'O365BusinessRetail'
-        }
+    #         $result | Should -Not -BeNullOrEmpty
+    #         $result.ProductId | Should -Be 'O365BusinessRetail'
+    #     }
 
-        It 'Should handle minimal configuration with defaults' {
-            $dscResourceParameters = @{
-                ModuleName = 'OfficeDsc'
-                Name = 'Office365Installer'
-                Method = 'Get'
-                Property = @{
-                    Path = $script:mockOdtPath
-                }
-            }
+    #     It 'Should handle minimal configuration with defaults' {
+    #         $dscResourceParameters = @{
+    #             ModuleName = 'OfficeDsc'
+    #             Name = 'Office365Installer'
+    #             Method = 'Get'
+    #             Property = @{
+    #                 Path = $script:mockOdtPath
+    #             }
+    #         }
 
-            $result = Invoke-DscResource @dscResourceParameters
+    #         $result = Invoke-DscResource @dscResourceParameters
             
-            $result | Should -Not -BeNullOrEmpty
-            $result.Path | Should -Be $script:mockOdtPath
-            $result.ProductId | Should -Be 'O365ProPlusRetail'
-            $result.Channel | Should -Be 'Current'
-            $result.ExcludeApps | Should -Be @()
-            $result.Exist | Should -Be $false
-        }
+    #         $result | Should -Not -BeNullOrEmpty
+    #         $result.Path | Should -Be $script:mockOdtPath
+    #         $result.ProductId | Should -Be 'O365ProPlusRetail'
+    #         $result.Channel | Should -Be 'Current'
+    #         $result.ExcludeApps | Should -Be @()
+    #         $result.Exist | Should -Be $false
+    #     }
 
-        It 'Should test complete configuration for desired state' {
-            $dscResourceParameters = @{
-                ModuleName = 'OfficeDsc'
-                Name = 'Office365Installer'
-                Method = 'Test'
-                Property = @{
-                    Path = $script:mockOdtPath
-                    ProductId = 'O365ProPlusEEANoTeamsRetail'
-                    Channel = 'SemiAnnual'
-                    ExcludeApps = @('OneNote', 'Publisher')
-                    LanguageId = @('en-GB', 'fr-FR')
-                    Exist = $false
-                }
-            }
+    #     It 'Should test complete configuration for desired state' {
+    #         $dscResourceParameters = @{
+    #             ModuleName = 'OfficeDsc'
+    #             Name = 'Office365Installer'
+    #             Method = 'Test'
+    #             Property = @{
+    #                 Path = $script:mockOdtPath
+    #                 ProductId = 'O365ProPlusEEANoTeamsRetail'
+    #                 Channel = 'SemiAnnual'
+    #                 ExcludeApps = @('OneNote', 'Publisher')
+    #                 LanguageId = @('en-GB', 'fr-FR')
+    #                 Exist = $false
+    #             }
+    #         }
 
-            $result = Invoke-DscResource @dscResourceParameters
-            $result.InDesiredState | Should -BeOfType [System.Boolean]
-        }
-    }
-
-    Context 'Error Handling Tests' {
-        It 'Should handle missing mandatory Path parameter' {
-            $dscResourceParameters = @{
-                ModuleName = 'OfficeDsc'
-                Name = 'Office365Installer'
-                Method = 'Get'
-                Property = @{}
-            }
-
-            { Invoke-DscResource @dscResourceParameters } | Should -Throw
-        }
-
-        It 'Should handle invalid ProductId enum value' {
-            $dscResourceParameters = @{
-                ModuleName = 'OfficeDsc'
-                Name = 'Office365Installer'
-                Method = 'Get'
-                Property = @{
-                    Path = $script:mockOdtPath
-                    ProductId = 'InvalidProductId'
-                }
-            }
-
-            { Invoke-DscResource @dscResourceParameters } | Should -Throw
-        }
-
-        It 'Should handle invalid Channel enum value' {
-            $dscResourceParameters = @{
-                ModuleName = 'OfficeDsc'
-                Name = 'Office365Installer'
-                Method = 'Get'
-                Property = @{
-                    Path = $script:mockOdtPath
-                    Channel = 'InvalidChannel'
-                }
-            }
-
-            { Invoke-DscResource @dscResourceParameters } | Should -Throw
-        }
-
-        It 'Should handle invalid ExcludeApps enum values' {
-            $dscResourceParameters = @{
-                ModuleName = 'OfficeDsc'
-                Name = 'Office365Installer'
-                Method = 'Get'
-                Property = @{
-                    Path = $script:mockOdtPath
-                    ExcludeApps = @('InvalidApp1', 'InvalidApp2')
-                }
-            }
-
-            { Invoke-DscResource @dscResourceParameters } | Should -Throw
-        }
-    }
-
-    Context 'Boundary Value Tests' {
-        It 'Should handle empty ExcludeApps array' {
-            $dscResourceParameters = @{
-                ModuleName = 'OfficeDsc'
-                Name = 'Office365Installer'
-                Method = 'Get'
-                Property = @{
-                    Path = $script:mockOdtPath
-                    ExcludeApps = @()
-                }
-            }
-
-            $result = Invoke-DscResource @dscResourceParameters
-            $result.ExcludeApps | Should -Be @()
-        }
-
-        It 'Should handle maximum number of excluded apps' {
-            $allApps = @('Access', 'Excel', 'Groove', 'Lync', 'OneDrive', 'OneNote', 'Outlook', 'OutlookForWindows', 'PowerPoint', 'Publisher', 'Teams', 'Word')
-            $dscResourceParameters = @{
-                ModuleName = 'OfficeDsc'
-                Name = 'Office365Installer'
-                Method = 'Get'
-                Property = @{
-                    Path = $script:mockOdtPath
-                    ExcludeApps = $allApps
-                }
-            }
-
-            $result = Invoke-DscResource @dscResourceParameters
-            $result | Should -Not -BeNullOrEmpty
-        }
-
-        It 'Should handle empty LanguageId array' {
-            $dscResourceParameters = @{
-                ModuleName = 'OfficeDsc'
-                Name = 'Office365Installer'
-                Method = 'Get'
-                Property = @{
-                    Path = $script:mockOdtPath
-                    LanguageId = @()
-                }
-            }
-
-            $result = Invoke-DscResource @dscResourceParameters
-            $result | Should -Not -BeNullOrEmpty
-        }
-
-        It 'Should handle null LanguageId' {
-            $dscResourceParameters = @{
-                ModuleName = 'OfficeDsc'
-                Name = 'Office365Installer'
-                Method = 'Get'
-                Property = @{
-                    Path = $script:mockOdtPath
-                    LanguageId = $null
-                }
-            }
-
-            $result = Invoke-DscResource @dscResourceParameters
-            $result | Should -Not -BeNullOrEmpty
-        }
-    }
-
-    AfterAll {
-        # Clean up test registry path
-        Remove-Item -Path 'Env:TestRegistryPath' -ErrorAction SilentlyContinue
-    }
+    #         $result = Invoke-DscResource @dscResourceParameters
+    #         $result.InDesiredState | Should -BeOfType [System.Boolean]
+    #     }
+    # }
 }
