@@ -3,8 +3,16 @@ name: OfficeDsc CI
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - 'powershell/modules/OfficeDsc/**'
+      - 'tests/OfficeDsc.tests.ps1'
+      - '.github/workflows/OfficeDscCI.yml'
   pull_request:
     branches: [ "main" ]
+    paths:
+      - 'powershell/modules/OfficeDsc/**'
+      - 'tests/OfficeDsc.tests.ps1'
+      - '.github/workflows/OfficeDscCI.yml'
 
 jobs:
   test:
