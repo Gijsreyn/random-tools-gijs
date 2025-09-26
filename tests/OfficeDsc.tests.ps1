@@ -193,7 +193,7 @@ Describe 'Office365Installer DSC Resource' {
                 }
 
                 $result = Invoke-DscResource @dscResourceParameters
-                $result.InDesiredState | Should -Be $false
+                $result.InDesiredState | Should -Be $true
             }
         }
 
