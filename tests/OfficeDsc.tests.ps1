@@ -18,7 +18,7 @@ BeforeAll {
     $FullyQualifiedName = @{ModuleName = "PSDesiredStateConfiguration"; ModuleVersion = "2.0.7" }
     if (-not(Get-Module -ListAvailable -FullyQualifiedName $FullyQualifiedName))
     {
-        Install-PSResource -Name PSDesiredStateConfiguration -Version 2.0.7 -Repository $repository -TrustRepository
+        Install-PSResource -Name PSDesiredStateConfiguration -Version 2.0.7 -Repository 'PSGallery' -TrustRepository
     }
 
     $outFile = Join-Path $env:TEMP 'setup.exe'

@@ -18,14 +18,14 @@ jobs:
       shell: pwsh
       run: |
         Write-Host "Installing Pester..."
-        Install-PSResource -Name Pester -Repository PSGallery -TrustRepository -ReInstall -Version 5.7.1
+        Install-PSResource -Name Pester -Repository PSGallery -TrustRepository -ReInstall -Version 5.7.1 -Scope AllUsers
 
     - name: Run Pester tests
       shell: pwsh
       run: |
         $env:PSModulePath += ";$PWD/powershell/modules"
         Write-Host "Running Pester tests..."
-        Invoke-Pester -Path "$PWD/tests" -CI
+        Invoke-Pester -Path "$PWD/tests" -CI -Output Detailed
     
     # - name: Upload test results
     #   uses: actions/upload-artifact@v4
