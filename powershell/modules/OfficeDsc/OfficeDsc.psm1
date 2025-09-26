@@ -1,6 +1,3 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT License.
-
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
@@ -109,6 +106,12 @@ function Get-OfficeChannel
 
     $Uri = TryGetRegistryValue -Key $global:OfficeRegistryPath -Property 'UpdateChannel'
 
+    if ([string]::IsNullOrEmpty($Uri))
+    {
+        Write-Verbose -Message 'No channel URI found in registry, defaulting to Current channel.'
+        return [Channel]::Current
+    }
+
     # Channel URIs: https://learn.microsoft.com/en-us/intune/intune-service/configuration/settings-catalog-update-office#check-the-intune-registry-keys
     $Channel = switch ($Uri)
     {
@@ -118,7 +121,7 @@ function Get-OfficeChannel
         'http://officecdn.microsoft.com/pr/55336b82-a18d-4dd6-b5f6-9e5095c314a6' { [Channel]::MonthlyEnterprise }
         'http://officecdn.microsoft.com/pr/b8f9b850-328d-4355-9145-c59439a0c4cf' { [Channel]::SemiAnnualPreview }
         'http://officecdn.microsoft.com/pr/7ffbc6bf-bc32-4f92-8982-f9dd17fd3114' { [Channel]::SemiAnnual }
-        default { [Channel]::Current }
+        default { throw "Unknown channel URI found in registry: '$Uri'" }
     }
 
     return $Channel
@@ -133,10 +136,10 @@ function Get-OfficeInstallation
         [ProductId]$ProductId
     )
     
-    # Find the known key
+    # find the known key
     $keyPresent = TryGetRegistryValue -Key $global:OfficeRegistryPath -Property 'InstallationPath'
 
-    # Extra check if the product is installed via Click-to-Run
+    # extra check if the product is installed via Click-to-Run
     $installed = $false
     if ($null -ne $keyPresent)
     {
@@ -145,7 +148,7 @@ function Get-OfficeInstallation
 
     $searchProperty = [System.String]::Concat($ProductId, '.ExcludedApps')
 
-    # Go through the excluded apps and filter out the installed apps
+    # go through the excluded apps and filter out the installed apps
     Write-Verbose -Message "Searching for excluded apps with property name: '$searchProperty'."
     $excludedApps = TryGetRegistryValue -Key $global:OfficeRegistryPath -Property $searchProperty
     $appsInstalled = [PackageId]::GetNames([PackageId])
@@ -193,7 +196,8 @@ function Assert-OfficeDeploymentToolSetup
             throw "The executable at '$Path' did not exit successfully. ExitCode: $LASTEXITCODE"
         }
 
-        if ($output -notmatch 'Office Deployment Tool')
+        # TODO: Can be improved by checking for specific output lines
+        if ($output[1] -ne 'Office Deployment Tool')
         {
             throw "The executable at '$Path' does not appear to be the Office Deployment Tool."
         }
@@ -204,14 +208,53 @@ function Assert-OfficeDeploymentToolSetup
     }
 }
 
-function New-OfficeConfigurationXml
+<#
+    .SYNOPSIS
+        Creates an Office Deployment Tool configuration XML file for installation.
+
+    .DESCRIPTION
+        Generates a configuration XML file for the Office Deployment Tool (ODT) to install 
+        Microsoft Office products. The XML includes product specifications, languages, 
+        excluded applications, and display settings.
+
+    .PARAMETER ProductId
+        The Office product identifier to install.
+
+    .PARAMETER ExcludeApps
+        Array of Office applications to exclude from installation.
+
+    .PARAMETER Channel
+        The Office update channel to use. Default is Current channel.
+
+    .PARAMETER LanguageId
+        Array of language identifiers to install. Default is the current system culture.
+
+    .INPUTS
+        None
+
+        This function does not accept pipeline input.
+
+    .OUTPUTS
+        System.String
+
+        Path to the temporary configuration XML file.
+
+    .EXAMPLE
+        New-OfficeInstallationConfigurationFile -ProductId O365ProPlusRetail
+        Creates installation configuration for Office 365 Pro Plus with current system language.
+
+    .EXAMPLE
+        New-OfficeInstallationConfigurationFile -ProductId O365ProPlusRetail -ExcludeApps @('Teams', 'OneNote') -LanguageId @('en-US', 'fr-FR')
+        Creates installation configuration excluding Teams and OneNote with English and French languages.
+#>
+function New-OfficeInstallationConfigurationFile
 {
     [OutputType([System.String])]
     [CmdletBinding()]
     param
     (
-        [Parameter(Mandatory)]
-        [System.String]
+        [Parameter(Mandatory = $true)]
+        [ProductId]
         $ProductId,
 
         [Parameter()]
@@ -220,86 +263,187 @@ function New-OfficeConfigurationXml
 
         [Parameter()]
         [Channel]
-        $Channel = [Channel]::Current, # Default is current
+        $Channel = [Channel]::Current,
 
         [Parameter()]
         [System.String[]]
-        $LanguageId = (@([System.Globalization.CultureInfo]::CurrentCulture.Name)), # Default to current system culture
-
-        [System.Management.Automation.SwitchParameter]
-        $Remove
+        $LanguageId
     )
 
-    if ($null -eq $LanguageId -or $LanguageId -eq '')
+    if ([string]::IsNullOrEmpty($LanguageId))
     {
-        # Default to current
-        $LanguageId = [System.Globalization.CultureInfo]::GetCultureInfo.Name
-        Write-Verbose -Message "Using current system culture as language ID: '$LanguageId'."
+        $currentCulture = [System.Globalization.CultureInfo]::CurrentCulture.Name
+        Write-Verbose -Message "No LanguageId specified, defaulting to current system culture: '$currentCulture'."
+        $LanguageId = @($currentCulture)
     }
 
-    # Get the bitness
     $bitness = [Environment]::Is64BitOperatingSystem ? '64' : '32'
+    $xml = [System.Xml.XmlDocument]::new()
 
-    # Build the document
-    $xml = New-Object System.Xml.XmlDocument
+    $configuration = $xml.CreateElement('Configuration')
+    $xml.AppendChild($configuration) | Out-Null
 
-    $config = $xml.CreateElement('Configuration')
-    $xml.AppendChild($config) | Out-Null
-
-    $parentNodeName = $Remove ? 'Remove' : 'Add'
-    $parentNode = $xml.CreateElement($parentNodeName)
-    $parentNode.SetAttribute('OfficeClientEdition', $bitness)
-    $parentNode.SetAttribute('Channel', $Channel)
-    $config.AppendChild($parentNode) | Out-Null
+    $addNode = $xml.CreateElement('Add')
+    $addNode.SetAttribute('OfficeClientEdition', $bitness)
+    $addNode.SetAttribute('Channel', $Channel)
+    $configuration.AppendChild($addNode) | Out-Null
 
     $product = $xml.CreateElement('Product')
     $product.SetAttribute('ID', $ProductId)
-    $parentNode.AppendChild($product) | Out-Null
+    $addNode.AppendChild($product) | Out-Null
 
-    foreach ($lang in $LanguageId)
+    foreach ($languageCode in $LanguageId)
     {
         $language = $xml.CreateElement('Language')
-        $language.SetAttribute('ID', $lang)
+        $language.SetAttribute('ID', $languageCode)
         $product.AppendChild($language) | Out-Null
     }
 
-    foreach ($app in $ExcludeApps)
+    foreach ($applicationId in $ExcludeApps)
     {
-        $exclude = $xml.CreateElement('ExcludeApp')
-        $exclude.SetAttribute('ID', $app)
-        $product.AppendChild($exclude) | Out-Null
+        $excludeApplication = $xml.CreateElement('ExcludeApp')
+        $excludeApplication.SetAttribute('ID', $applicationId)
+        $product.AppendChild($excludeApplication) | Out-Null
     }
 
     $display = $xml.CreateElement('Display')
     $display.SetAttribute('Level', 'None')
-    if (-not $Remove.IsPresent) 
-    {
-        $display.SetAttribute('AcceptEULA', 'TRUE')
-    }
-    $config.AppendChild($display) | Out-Null
+    $display.SetAttribute('AcceptEULA', 'TRUE')
+    $configuration.AppendChild($display) | Out-Null
 
-    $stringWriter = New-Object System.IO.StringWriter
-    $xmlWriter = New-Object System.Xml.XmlTextWriter($stringWriter)
+    $stringWriter = [System.IO.StringWriter]::new()
+    $xmlWriter = [System.Xml.XmlTextWriter]::new($stringWriter)
     $xmlWriter.Formatting = 'Indented'
     $xml.WriteTo($xmlWriter)
     $xmlWriter.Flush()
-    $configXml = $stringWriter.ToString()
+    $configurationXml = $stringWriter.ToString()
     $xmlWriter.Close()
 
-    Write-Verbose -Message "Generated Office configuration XML:`n$configXml"
-    # write the config file to a temp location
-    $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) "ODT_Install_$(Get-Random).xml"
+    Write-Verbose -Message "Generated Office installation configuration XML:`n$configurationXml"
+    
+    $tempFilePath = Join-Path ([System.IO.Path]::GetTempPath()) "ODT_Install_$(Get-Random).xml"
     try
     {
-        Set-Content -Path $tempDir -Value $configXml -Encoding UTF8 -Force
+        Set-Content -Path $tempFilePath -Value $configurationXml -Encoding UTF8 -Force -ErrorAction Stop
+        Write-Verbose -Message "Temporary configuration file created at: '$tempFilePath'."
+        return $tempFilePath
     }
     catch
     {
-        throw "Failed to create temporary configuration file: '$tempDir'"
+        Write-Error -Message "Failed to create temporary configuration file: '$tempFilePath'" -Category WriteError -ErrorId 'TempFileCreationFailed' -TargetObject $tempFilePath -Exception $_.Exception
+        return $null
     }
+}
 
-    Write-Verbose -Message "Temporary configuration file created at: '$tempDir'."
-    return $tempDir
+<#
+    .SYNOPSIS
+        Creates an Office Deployment Tool configuration XML file for removal.
+
+    .DESCRIPTION
+        Generates a configuration XML file for the Office Deployment Tool (ODT) to remove 
+        Microsoft Office products. If no LanguageId is specified, sets All="TRUE" to remove 
+        all Office products and languages. If LanguageId is specified, sets All="FALSE" 
+        for targeted removal of specific languages.
+
+    .PARAMETER ProductId
+        The Office product identifier to remove.
+
+    .PARAMETER LanguageId
+        Array of language identifiers to remove. If not specified, removes all Office 
+        products and languages (All="TRUE"). If specified, performs targeted removal (All="FALSE").
+
+    .INPUTS
+        None
+
+        This function does not accept pipeline input.
+
+    .OUTPUTS
+        System.String
+
+        Path to the temporary configuration XML file.
+
+    .EXAMPLE
+        New-OfficeRemovalConfigurationFile -ProductId O365ProPlusRetail
+        Creates removal configuration that removes all Office products and languages (All="TRUE").
+
+    .EXAMPLE
+        New-OfficeRemovalConfigurationFile -ProductId O365ProPlusRetail -LanguageId @('en-US', 'fr-FR')
+        Creates removal configuration for specific languages with targeted removal (All="FALSE").
+#>
+function New-OfficeRemovalConfigurationFile
+{
+    [OutputType([System.String])]
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(Mandatory = $true)]
+        [ProductId]
+        $ProductId,
+
+        [Parameter()]
+        [System.String[]]
+        $LanguageId
+    )
+
+    $bitness = [Environment]::Is64BitOperatingSystem ? '64' : '32'
+    $xml = [System.Xml.XmlDocument]::new()
+
+    $configuration = $xml.CreateElement('Configuration')
+    $xml.AppendChild($configuration) | Out-Null
+
+    $removeNode = $xml.CreateElement('Remove')
+    $removeNode.SetAttribute('OfficeClientEdition', $bitness)
+    
+    if ($null -eq $LanguageId -or $LanguageId.Count -eq 0)
+    {
+        $removeNode.SetAttribute('All', 'TRUE')
+        Write-Verbose -Message 'No LanguageId specified for removal. Setting All="TRUE" to remove all Office products and languages.'
+    }
+    else
+    {
+        $removeNode.SetAttribute('All', 'FALSE')
+        Write-Verbose -Message 'LanguageId specified for removal. Setting All="FALSE" for targeted removal.'
+        
+        $product = $xml.CreateElement('Product')
+        $product.SetAttribute('ID', $ProductId)
+        $removeNode.AppendChild($product) | Out-Null
+
+        foreach ($languageCode in $LanguageId)
+        {
+            $language = $xml.CreateElement('Language')
+            $language.SetAttribute('ID', $languageCode)
+            $product.AppendChild($language) | Out-Null
+        }
+    }
+    
+    $configuration.AppendChild($removeNode) | Out-Null
+
+    $display = $xml.CreateElement('Display')
+    $display.SetAttribute('Level', 'None')
+    $configuration.AppendChild($display) | Out-Null
+
+    $stringWriter = [System.IO.StringWriter]::new()
+    $xmlWriter = [System.Xml.XmlTextWriter]::new($stringWriter)
+    $xmlWriter.Formatting = 'Indented'
+    $xml.WriteTo($xmlWriter)
+    $xmlWriter.Flush()
+    $configurationXml = $stringWriter.ToString()
+    $xmlWriter.Close()
+
+    Write-Verbose -Message "Generated Office removal configuration XML:`n$configurationXml"
+    
+    $tempFilePath = Join-Path ([System.IO.Path]::GetTempPath()) "ODT_Remove_$(Get-Random).xml"
+    try
+    {
+        Set-Content -Path $tempFilePath -Value $configurationXml -Encoding UTF8 -Force -ErrorAction Stop
+        Write-Verbose -Message "Temporary configuration file created at: '$tempFilePath'."
+        return $tempFilePath
+    }
+    catch
+    {
+        Write-Error -Message "Failed to create temporary configuration file: '$tempFilePath'" -Category WriteError -ErrorId 'TempFileCreationFailed' -TargetObject $tempFilePath -Exception $_.Exception
+        return $null
+    }
 }
 
 function Assert-LanguageInstalled
@@ -351,35 +495,47 @@ function Install-OfficeProduct
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
-        [string] $Path,
+        [string] 
+        $Path,
 
         [Parameter(Mandatory)]
-        [ProductId] $ProductId,
+        [ProductId] 
+        $ProductId,
 
         [Parameter()]
-        [Channel] $Channel = [Channel]::Current,
+        [Channel] 
+        $Channel = [Channel]::Current,
 
         [Parameter()]
-        [string[]] $LanguageId,
+        [AllowNull()]
+        [string[]] 
+        $LanguageId,
 
         [Parameter()]
-        [PackageId[]] $ExcludeApps = @()
+        [PackageId[]] 
+        $ExcludeApps = @()
     )
 
-    $configFilePath = New-OfficeConfigurationXml -ProductId $ProductId -Channel $Channel -ExcludeApps $ExcludeApps -LanguageId $LanguageId
+    $configurationFileParameters = @{
+        ProductId   = $ProductId
+        Channel     = $Channel
+        LanguageId  = $LanguageId
+        ExcludeApps = $ExcludeApps
+    }
+    $configurationFilePath = New-OfficeInstallationConfigurationFile @configurationFileParameters
 
-    if ($null -ne $LanguageId -or $LanguageId -ne '')
+    if (-not ([string]::IsNullOrEmpty($LanguageId)))
     {
+        Write-Verbose -Message "Validating specified LanguageId(s): $($LanguageId -join ', ')"
         Assert-LanguageInstalled -LanguageId $LanguageId
         Assert-OfficeLanguageSupported -LanguageId $LanguageId
     }
 
-    $arguments = "/configure `"$configFilePath`""
-    Write-Verbose "Launching Office setup: $Path $arguments"
-    Start-Process -FilePath $Path -ArgumentList $arguments -Wait -NoNewWindow
+    $arguments = "/configure `"$configurationFilePath`""
+    Invoke-OfficeDeploymentTool -Path $Path -Arguments $arguments -Operation 'Installation'
 }
 
-function Uninstall-Office
+function Uninstall-OfficeProduct
 {
     [CmdletBinding()]
     param
@@ -393,25 +549,135 @@ function Uninstall-Office
         $ProductId,
 
         [Parameter()]
-        [PackageId[]]
-        $ExcludeApps = @()
+        [string[]] 
+        $LanguageId,
+
+        [Parameter()]
+        [Channel] 
+        $Channel = [Channel]::Current
     )
 
-    $configFilePath = New-OfficeConfigurationXml -ProductId $ProductId -ExcludeApps $ExcludeApps -Remove
+    $configurationFileParameters = @{
+        ProductId  = $ProductId
+        LanguageId = $LanguageId
+    }
+    $configurationFilePath = New-OfficeRemovalConfigurationFile @configurationFileParameters
 
-    $arguments = "/configure $configFilePath"
-    Write-Verbose -Message "Starting Office uninstallation at path '$Path' with arguments: '$arguments'"
-    Start-Process -FilePath $Path -ArgumentList $arguments -Wait -NoNewWindow
+    if (-not ([string]::IsNullOrEmpty($LanguageId)))
+    {
+        Write-Verbose -Message "Validating specified LanguageId(s): $($LanguageId -join ', ')"
+        Assert-LanguageInstalled -LanguageId $LanguageId
+        Assert-OfficeLanguageSupported -LanguageId $LanguageId
+    }
+
+    $arguments = "/configure `"$configurationFilePath`""
+    Invoke-OfficeDeploymentTool -Path $Path -Arguments $arguments -Operation 'Uninstallation'
+}
+
+<#
+    .SYNOPSIS
+        Executes the Office Deployment Tool with error handling and logging.
+
+    .DESCRIPTION
+        A wrapper function that executes the Office Deployment Tool setup.exe with the 
+        specified arguments. Provides logging of the operation and validates
+        the exit code. Throws a terminating error if the ODT process fails or returns
+        a non-zero exit code.
+
+    .PARAMETER Path
+        The full path to the Office Deployment Tool setup executable (setup.exe).
+
+    .PARAMETER Arguments
+        The command-line arguments to pass to the ODT setup executable.
+
+    .PARAMETER Operation
+        A descriptive name for the operation being performed (e.g., 'Installation', 'Uninstallation').
+
+    .INPUTS
+        None
+
+        This function does not accept pipeline input.
+
+    .OUTPUTS
+        None
+
+        This function does not return output.
+
+    .EXAMPLE
+        Invoke-OfficeDeploymentTool -Path 'C:\ODT\setup.exe' -Arguments '/configure "config.xml"' -Operation 'Installation'
+        Executes the ODT with the specified configuration file for installation.
+#>
+function Invoke-OfficeDeploymentTool
+{
+    [CmdletBinding()]
+    [OutputType()]
+    param
+    (
+        [Parameter(Mandatory = $true)]
+        [System.String]
+        $Path,
+
+        [Parameter(Mandatory = $true)]
+        [System.String]
+        $Arguments,
+
+        [Parameter(Mandatory = $true)]
+        [System.String]
+        $Operation
+    )
+
+    Write-Verbose -Message "Starting Office $Operation using ODT at: '$Path'"
+    Write-Verbose -Message "ODT Arguments: $Arguments"
+
+    try
+    {
+        $processInfo = Start-Process -FilePath $Path -ArgumentList $Arguments -Wait -NoNewWindow -PassThru -ErrorAction Stop
+        
+        Write-Verbose -Message "Office $Operation process completed with exit code: $($processInfo.ExitCode)"
+
+        if ($processInfo.ExitCode -ne 0)
+        {
+            $errorMessage = "Office $Operation failed. ODT setup.exe returned exit code: $($processInfo.ExitCode)"
+            
+            # Common ODT exit codes for better error messages
+            switch ($processInfo.ExitCode)
+            {
+                30174 { $errorMessage += ' (Another installation is already in progress)' }
+                30175 { $errorMessage += ' (This product is not supported on this operating system)' }
+                30180 { $errorMessage += ' (Insufficient system resources)' }
+                17002 { $errorMessage += ' (Invalid configuration XML)' }
+                17004 { $errorMessage += ' (Required update channel not available)' }
+                default { $errorMessage += ' (See ODT documentation for exit code details)' }
+            }
+
+            throw $errorMessage
+        }
+
+        Write-Verbose -Message "Office $Operation completed successfully."
+    }
+    catch
+    {
+        $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+            $_.Exception,
+            "OfficeDeploymentToolFailed",
+            [System.Management.Automation.ErrorCategory]::OperationStopped,
+            $Path
+        )
+        
+        $PSCmdlet.ThrowTerminatingError($errorRecord)
+    }
 }
 
 function TryGetRegistryValue
 {
     param (
         [Parameter(Mandatory = $true)]
-        [string]$Key,
+        [System.String]
+        $Key,
 
         [Parameter(Mandatory = $true)]
-        [string]$Property
+        [System.String]
+        $Property
     )
 
     if (Test-Path -Path $Key)
@@ -466,7 +732,9 @@ function Get-LanguageId
     }
     catch
     {
-        Write-Error -Message "Failed to access Office ProductReleaseIds registry path: '$global:OfficeProductReleaseIdsPath'" -Category ObjectNotFound -ErrorId 'RegistryPathNotFound' -TargetObject $global:OfficeProductReleaseIdsPath -Exception $_.Exception
+        Write-Verbose -Message (
+            "Failed to access Office ProductReleaseIds registry path: '{0}'" -f $global:OfficeProductReleaseIdsPath
+        )
         return @()
     }
 
@@ -481,7 +749,7 @@ function Get-LanguageId
 
     if ($null -eq $LanguageId -or $LanguageId.Count -eq 0)
     {
-        Write-Verbose -Message 'No LanguageId specified, returning all valid languages for the ProductId.'
+        Write-Verbose -Message 'No LanguageId specified, returning all valid languages.'
         
         foreach ($languagePath in $productLanguagePaths)
         {
@@ -552,7 +820,8 @@ class Office365Installer
     {
         $currentState = [Office365Installer]::new()
         # TODO: Have to validate if it can contain multiple ProductIds
-        $currentState.ProductId = TryGetRegistryValue -Key $global:OfficeRegistryPath -Property 'ProductReleaseIds'
+        $productReleaseIds = TryGetRegistryValue -Key $global:OfficeProductReleaseIdsPath -Property 'ProductReleaseIds'
+        $currentState.ProductId = ($null -ne $productReleaseIds) ? ([ProductId]($productReleaseIds)) : $this.ProductId
 
         $officeInstalled = Get-OfficeInstallation -ProductId $this.ProductId
         $currentState.ExcludeApps = $officeInstalled.ExcludedApps
@@ -633,7 +902,7 @@ class Office365Installer
             ExcludeApps = $this.ExcludeApps
         }
 
-        Install-Office @installParams
+        Install-OfficeProduct @installParams
     }
 
     [void] Install()
@@ -643,7 +912,13 @@ class Office365Installer
 
     [void] Uninstall([bool] $preTest)
     {
-        Uninstall-Office -Path $this.Path -ProductId $this.ProductId -ExcludeApps $this.ExcludeApps
+        $uninstallParams = @{
+            Path       = $this.Path
+            ProductId  = $this.ProductId
+            Channel    = $this.Channel
+            LanguageId = $this.LanguageId
+        }
+        Uninstall-OfficeProduct @uninstallParams
     }
 
     [void] Uninstall()
