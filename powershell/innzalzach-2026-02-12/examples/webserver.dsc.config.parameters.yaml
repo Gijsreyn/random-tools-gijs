@@ -1,0 +1,9 @@
+# Parameter file for webserver.dsc.config.yaml
+# Usage: dsc config --parameters-file examples/webserver.parameters.yaml get --file examples/webserver.dsc.config.yaml
+
+parameters:
+  serverName: WebServer01
+  port: 80
+  enableSSL: true
+  sslPort: 443
+  webRoot: C:\inetpub\wwwroot

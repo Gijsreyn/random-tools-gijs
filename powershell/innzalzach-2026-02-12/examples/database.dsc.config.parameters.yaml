@@ -1,0 +1,11 @@
+# Parameter file for database.dsc.config.yaml
+# Usage: dsc config --parameters-file examples/database.parameters.yaml test --file examples/database.dsc.config.yaml
+
+parameters:
+  instanceName: PROD-SQL-01
+  databaseName: HandbookDB
+  adminUsers:
+    - sa
+    - DBAdmin
+    - ReportAdmin
+  backupPath: D:\SQLBackups

@@ -1,0 +1,44 @@
+# Database configuration with array parameters
+# Usage: dsc config --parameters-file examples/database.parameters.yaml test --file examples/database.dsc.config.yaml
+
+$schema: https://aka.ms/dsc/schemas/v3/bundled/config/document.json
+
+parameters:
+  instanceName:
+    type: string
+    description: SQL Server instance name
+  databaseName:
+    type: string
+    description: Database name
+  adminUsers:
+    type: array
+    description: List of database administrator logins
+  backupPath:
+    type: string
+    description: Backup directory path
+    defaultValue: C:\SQLBackups
+
+resources:
+  - name: Database Registry Configuration
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: "[concat('HKCU\\Software\\DatabaseConfig\\', parameters('instanceName'))]"
+      valueName: DatabaseName
+      valueData:
+        String: "[parameters('databaseName')]"
+
+  - name: Admin Users Configuration
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: "[concat('HKCU\\Software\\DatabaseConfig\\', parameters('instanceName'))]"
+      valueName: AdminUsers
+      valueData:
+        String: "[join(parameters('adminUsers'), ';')]"
+
+  - name: Backup Path Configuration
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: "[concat('HKCU\\Software\\DatabaseConfig\\', parameters('instanceName'))]"
+      valueName: BackupPath
+      valueData:
+        String: "[parameters('backupPath')]"

@@ -1,0 +1,42 @@
+# Simple application configuration with parameters
+# Usage: dsc config --parameters-file examples/app-config.dsc.config.parameters.yaml get --file examples/app-config.dsc.config.yaml
+
+$schema: https://aka.ms/dsc/schemas/v3/bundled/config/document.json
+
+parameters:
+  appName:
+    type: string
+    description: Name of the application
+  logLevel:
+    type: string
+    description: Logging level (Debug, Information, Warning, Error)
+    defaultValue: Information
+  maxLogSize:
+    type: int
+    description: Maximum log file size in MB
+    defaultValue: 100
+
+resources:
+  - name: Application Registry Key
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: "[concat('HKCU\\Software\\', parameters('appName'))]"
+      valueName: LogLevel
+      valueData:
+        String: "[parameters('logLevel')]"
+
+  - name: Log Size Configuration
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: "[concat('HKCU\\Software\\', parameters('appName'))]"
+      valueName: MaxLogSizeMB
+      valueData:
+        DWord: "[int(parameters('maxLogSize'))]"
+
+  - name: Application Version
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: "[concat('HKCU\\Software\\', parameters('appName'))]"
+      valueName: ConfigVersion
+      valueData:
+        String: "1.0.0"
