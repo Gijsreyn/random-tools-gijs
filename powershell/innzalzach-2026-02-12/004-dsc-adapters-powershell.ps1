@@ -32,6 +32,7 @@ $resources.Count
 Install-PSResource -Name Microsoft.WinGet.DSC -Repository PSGallery -TrustRepository
 
 $resources = . $scriptPath -Operation list
+$resources.Count
 
 # Do the same as we did with Microsoft.WinGet/Package
 $jsonString = @{

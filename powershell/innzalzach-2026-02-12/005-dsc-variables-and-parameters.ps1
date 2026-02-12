@@ -1,15 +1,6 @@
 # Microsoft DSC: Parameters and Variables Demo
 # This demo shows how to work with parameters and variables in DSC configuration documents
 #
-# Run the script to see examples in action, or use Get-Help to see full documentation:
-#   Get-Help .\005-dsc-variables-and-parameters.ps1 -Full
-#
-# Key concepts demonstrated:
-# - Parameters: Passed from outside, make configs reusable across environments
-# - Variables: Defined within config, computed values and constants
-# - Using Microsoft.DSC.Debug/Echo resource for simple demonstrations
-# - File-based examples in the examples\ folder
-
 #region Parameters Basics
 
 # Parameters make configurations reusable across different environments
@@ -82,7 +73,6 @@ $documentWithDefaults = @{
 # This will use defaults: logLevel=Warning, appName=MyApplication
 dsc config test --input $documentWithDefaults
 
-Write-Host "`n=== Example 3: Override one parameter ===" -ForegroundColor Cyan
 # Override just one parameter, other uses default
 $overrideParams = @{
     parameters = @{
@@ -180,7 +170,6 @@ $arrayParamDocument = @{
     )
 } | ConvertTo-Json -Depth 10 -Compress
 
-Write-Host "`n=== Example 6: Array parameters ===" -ForegroundColor Cyan
 $arrayParams = @{
     parameters = @{
         adminUsers = @('Admin1', 'Admin2', 'Admin3')

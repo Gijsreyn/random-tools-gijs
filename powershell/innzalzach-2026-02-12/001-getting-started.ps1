@@ -4,9 +4,11 @@ $outFile = Join-Path -Path $env:TEMP -ChildPath 'DSC-3.2.0-preview.11-aarch64-pc
 Invoke-RestMethod -Uri $uri -OutFile $outFile
 
 # Or use PSDSC module (not to confuse with PowerShell DSC)
-Install-PSResource -Name PSDSC 
+Install-PSResource -Name PSDSC -Reinstall -TrustRepository
 
-Install-DscExe -IncludePrerelease
+Install-DscExe -IncludePrerelease -Force
+
+dsc --version
 #endregion Installing Microsoft DSC
 
 #region Discovering resources 
@@ -14,7 +16,7 @@ Install-DscExe -IncludePrerelease
 Get-DscResource # PowerShell DSC resources
 
 # New method
-dsc resource list # Microsoft DSC searches resource manifest on the system
+dsc resource list # Microsoft DSC searches resource manifest on the system *.dsc.resource.{json,yaml,yml} and lists them
 
 $registryResource = dsc resource list | 
     ConvertFrom-Json | 
@@ -41,11 +43,14 @@ Get-DscResource -Name 'WindowsFeature' -Module PSDesiredStateConfiguration | Sel
 $properties = @{
     Name = 'Web-Server'
 } # the properties we can use
-Invoke-DscResource -Name 'WindowsFeature' -Method 'Get' -Property $properties -ModuleName 'PSDesiredStateConfiguration'
+Invoke-DscResource -Name 'WindowsFeature' -Method 'Get' -Property $properties -ModuleName 'PSDesiredStateConfiguration' # Will error on my DevBox
 
 # Microsoft DSC way
-# None actually exists yet, we have to do it with the schema contract
+# None out-of-the-box exists yet, we have to do it with the schema contract
 dsc resource get --resource Microsoft.Windows/Registry --input '{}' # no Intellisense
+
+# Uses strong JSON contract
+dsc resource schema --resource Microsoft.Windows/Registry
 
 $json = @{
     keyPath = 'HKCU\Software\MyApplication'

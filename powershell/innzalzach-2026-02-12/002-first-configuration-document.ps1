@@ -21,6 +21,8 @@ Configuration MyConfiguration
             ValueData = '1.0.0'
             Ensure    = 'Present'
         }
+
+        # Tab-completion works here
     }
 }
 
@@ -57,9 +59,6 @@ Set-Content -Path $settingsFile -Value $schema
 New-Item registry.dsc.config.yaml -ItemType File -Force -Value @"
 `$schema: https://aka.ms/dsc/schemas/v3/bundled/config/document.vscode.json
 "@
-# Retrieve properties (no IntelliSense yet)
-dsc resource schema --resource Microsoft.Windows/Registry 
-
 dsc config test --file registry.dsc.config.yaml
 # the _inDesiredState canonical property indicates whether the resource is in the desired state
 dsc config set --file registry.dsc.config.yaml
