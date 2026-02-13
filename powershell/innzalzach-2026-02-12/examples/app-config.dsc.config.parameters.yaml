@@ -1,0 +1,7 @@
+# Parameter file for app-config.dsc.config.yaml
+# Usage: dsc config --parameters-file examples/app-config.parameters.yaml get --file examples/app-config.dsc.config.yaml
+
+parameters:
+  appName: MyDemoApp
+  logLevel: Debug
+  maxLogSize: 250

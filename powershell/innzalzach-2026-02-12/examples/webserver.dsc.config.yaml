@@ -1,0 +1,68 @@
+# Web server configuration with multiple parameter types
+# Demonstrates: string, int, bool parameters with defaults
+# Usage: dsc config --parameters-file examples/webserver.parameters.yaml get --file examples/webserver.dsc.config.yaml
+# Alternative: Override inline: dsc config --parameters-file examples/webserver.parameters.yaml --parameters '{"port": 8080}' get --file examples/webserver.dsc.config.yaml
+
+$schema: https://aka.ms/dsc/schemas/v3/bundled/config/document.json
+
+parameters:
+  serverName:
+    type: string
+    description: Web server name
+  port:
+    type: int
+    description: HTTP port number
+    defaultValue: 80
+  enableSSL:
+    type: bool
+    description: Enable SSL/TLS
+    defaultValue: true
+  sslPort:
+    type: int
+    description: HTTPS port number
+    defaultValue: 443
+  webRoot:
+    type: string
+    description: Web root directory
+    defaultValue: C:\inetpub\wwwroot
+
+resources:
+  - name: Server Name Configuration
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\\Software\\WebServerConfig
+      valueName: ServerName
+      valueData:
+        String: "[parameters('serverName')]"
+
+  - name: HTTP Port Configuration
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\\Software\\WebServerConfig
+      valueName: Port
+      valueData:
+        DWord: "[int(parameters('port'))]"
+
+  - name: SSL Configuration
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\\Software\\WebServerConfig
+      valueName: SSLEnabled
+      valueData:
+        DWord: "[int(if(parameters('enableSSL'), 1, 0))]"
+
+  - name: HTTPS Port Configuration
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\\Software\\WebServerConfig
+      valueName: SSLPort
+      valueData:
+        DWord: "[int(parameters('sslPort'))]"
+
+  - name: Web Root Configuration
+    type: Microsoft.Windows/Registry
+    properties:
+      keyPath: HKCU\\Software\\WebServerConfig
+      valueName: WebRoot
+      valueData:
+        String: "[parameters('webRoot')]"
