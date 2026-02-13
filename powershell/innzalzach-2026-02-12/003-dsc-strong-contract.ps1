@@ -5,9 +5,9 @@ $wingetPackageResource = dsc resource list |
 $wingetPackageResource
 
 # How did we find it?
-Get-Command winget 
-
+Get-Command winget # Or did it?
 $env:path.Split(";")
+dsc -l trace resource list
 
 # Capabilities listed in the resource manifest
 $wingetPackageResource.capabilities
