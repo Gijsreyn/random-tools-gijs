@@ -1,0 +1,8 @@
+# EPAC plan output and linter results are build artifacts, not source.
+Output/
+
+# Editor and OS noise
+.vs/
+*.user
+.DS_Store
+Thumbs.db

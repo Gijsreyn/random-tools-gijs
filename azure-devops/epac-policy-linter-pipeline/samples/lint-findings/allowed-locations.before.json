@@ -1,0 +1,49 @@
+{
+    "$schema": "https://raw.githubusercontent.com/Azure/enterprise-azure-policy-as-code/main/Schemas/policy-definition-schema.json",
+    "name": "allowed-locations",
+    "type": "Microsoft.Authorization/policyDefinitions",
+    "properties": {
+        "displayName": "Resources should be deployed to allowed locations",
+        "policyType": "Custom",
+        "mode": "Indexed",
+        "metadata": {
+            "version": "1.0.0",
+            "category": "General"
+        },
+        "parameters": {
+            "allowedLocations": {
+                "type": "Array",
+                "metadata": {
+                    "displayName": "Allowed locations",
+                    "description": "The list of locations that resources can be deployed to.",
+                    "strongType": "location"
+                },
+                "defaultValue": [
+                    "westeurope",
+                    "northeurope"
+                ]
+            }
+        },
+        "policyRule": {
+            "if": {
+                "allOf": [
+                    {
+                        "field": "location",
+                        "notIn": "[parameters('allowedLocation')]"
+                    },
+                    {
+                        "field": "location",
+                        "notEquals": "global"
+                    },
+                    {
+                        "field": "type",
+                        "notLike": "Microsoft.Resources/subscriptions/resourceGroups"
+                    }
+                ]
+            },
+            "then": {
+                "effect": "Deny"
+            }
+        }
+    }
+}

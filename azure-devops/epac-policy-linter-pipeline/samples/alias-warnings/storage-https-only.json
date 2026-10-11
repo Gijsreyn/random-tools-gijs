@@ -1,0 +1,55 @@
+{
+    "$schema": "https://raw.githubusercontent.com/Azure/enterprise-azure-policy-as-code/main/Schemas/policy-definition-schema.json",
+    "name": "storage-https-only",
+    "type": "Microsoft.Authorization/policyDefinitions",
+    "properties": {
+        "displayName": "Storage accounts should only allow HTTPS traffic",
+        "policyType": "Custom",
+        "mode": "Indexed",
+        "description": "Audits or denies storage accounts that accept unencrypted HTTP traffic. Secure transfer forces clients to use HTTPS and SMB 3.0 with encryption.",
+        "metadata": {
+            "version": "1.0.0",
+            "category": "Storage"
+        },
+        "parameters": {
+            "effect": {
+                "type": "String",
+                "metadata": {
+                    "displayName": "Effect",
+                    "description": "Enable or disable the execution of the policy."
+                },
+                "allowedValues": [
+                    "Audit",
+                    "Deny",
+                    "Disabled"
+                ],
+                "defaultValue": "Audit"
+            }
+        },
+        "policyRule": {
+            "if": {
+                "allOf": [
+                    {
+                        "field": "type",
+                        "equals": "Microsoft.Storage/storageAccounts"
+                    },
+                    {
+                        "anyOf": [
+                            {
+                                "field": "Microsoft.Storage/storageAccounts/supportsHttpsTrafficOnly",
+                                "exists": "false"
+                            },
+                            {
+                                "field": "Microsoft.Storage/storageAccounts/supportsHttpsTrafficOnly",
+                                "equals": "false"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "then": {
+                "effect": "[parameters('effect')]"
+            }
+        }
+    }
+}

@@ -1,0 +1,43 @@
+{
+    "$schema": "https://raw.githubusercontent.com/Azure/enterprise-azure-policy-as-code/main/Schemas/policy-assignment-schema.json",
+    "nodeName": "/baseline/",
+    // One assignment per custom definition, at the root of each EPAC environment.
+    // The scope map is keyed by pacSelector, so the same file drives both dev and prod.
+    "definitionEntryList": [
+        {
+            "policyName": "allowed-locations",
+            "displayName": "Resources should be deployed to allowed locations",
+            "assignment": {
+                "name": "allowed-locations",
+                "displayName": "Resources should be deployed to allowed locations",
+                "description": "Baseline control managed by EPAC."
+            }
+        },
+        {
+            "policyName": "rg-require-environment-tag",
+            "displayName": "Resource groups should have an 'environment' tag",
+            "assignment": {
+                "name": "rg-require-env-tag",
+                "displayName": "Resource groups should have an 'environment' tag",
+                "description": "Baseline control managed by EPAC."
+            }
+        }
+    ],
+    "parameters": {
+        // Start with Audit, review compliance data, then switch to Deny in a later change.
+        // Parameters a definition doesn't declare are ignored for that definition, so one block serves both.
+        "effect": "Audit",
+        "allowedLocations": [
+            "westeurope",
+            "northeurope"
+        ]
+    },
+    "scope": {
+        "epac-dev": [
+            "/providers/Microsoft.Management/managementGroups/mg-epac-dev"
+        ],
+        "epac-prod": [
+            "/providers/Microsoft.Management/managementGroups/mg-epac-prod"
+        ]
+    }
+}

@@ -1,0 +1,34 @@
+{
+    "$schema": "https://raw.githubusercontent.com/Azure/enterprise-azure-policy-as-code/main/Schemas/global-settings-schema.json",
+    // pacOwnerId identifies deployments made from this repository. Generate your own with (New-Guid).Guid
+    // and never reuse it in another repository.
+    "pacOwnerId": "9d2f7a4e-6c1b-4f0a-8e3d-5b7c2a1f9e04",
+    "pacEnvironments": [
+        {
+            // Policy development: the pipeline deploys here first, straight from main.
+            "pacSelector": "epac-dev",
+            "cloud": "AzureCloud",
+            "tenantId": "00000000-0000-0000-0000-000000000000", // TODO: replace with your tenant ID
+            "deploymentRootScope": "/providers/Microsoft.Management/managementGroups/mg-epac-dev",
+            "desiredState": {
+                "strategy": "full",
+                "keepDfcSecurityAssignments": false,
+                "doNotDisableDeprecatedPolicies": false
+            },
+            "managedIdentityLocation": "westeurope"
+        },
+        {
+            // Production: deployed after epac-dev succeeds and an approver signs off in Azure DevOps.
+            "pacSelector": "epac-prod",
+            "cloud": "AzureCloud",
+            "tenantId": "00000000-0000-0000-0000-000000000000", // TODO: replace with your tenant ID
+            "deploymentRootScope": "/providers/Microsoft.Management/managementGroups/mg-epac-prod",
+            "desiredState": {
+                "strategy": "full",
+                "keepDfcSecurityAssignments": false,
+                "doNotDisableDeprecatedPolicies": false
+            },
+            "managedIdentityLocation": "westeurope"
+        }
+    ]
+}

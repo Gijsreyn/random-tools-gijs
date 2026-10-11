@@ -1,0 +1,31 @@
+parameters:
+  - name: projectRoot
+    type: string
+    default: $(Build.SourcesDirectory)
+  - name: serviceConnection
+    type: string
+  - name: parentManagementGroupId
+    type: string
+    default: ''
+  - name: devManagementGroupName
+    type: string
+    default: mg-epac-dev
+  - name: prodManagementGroupName
+    type: string
+    default: mg-epac-prod
+
+steps:
+  - checkout: self
+
+  - task: AzurePowerShell@5
+    displayName: Create management groups if missing
+    inputs:
+      azureSubscription: ${{ parameters.serviceConnection }}
+      azurePowerShellVersion: LatestVersion
+      pwsh: true
+      ScriptType: FilePath
+      ScriptPath: ${{ parameters.projectRoot }}/scripts/New-PolicyManagementGroups.ps1
+      ScriptArguments: >-
+        -ParentManagementGroupId '${{ parameters.parentManagementGroupId }}'
+        -DevManagementGroupName '${{ parameters.devManagementGroupName }}'
+        -ProdManagementGroupName '${{ parameters.prodManagementGroupName }}'

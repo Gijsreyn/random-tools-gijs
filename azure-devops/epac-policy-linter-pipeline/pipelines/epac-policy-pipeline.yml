@@ -1,0 +1,189 @@
+name: $(Date:yyyyMMdd)$(Rev:.r)
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - azure-devops/epac-policy-linter-pipeline
+
+pr:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - azure-devops/epac-policy-linter-pipeline
+
+parameters:
+  - name: lintFailOn
+    displayName: Fail the Lint stage on findings at this severity or higher
+    type: string
+    default: Warning
+    values:
+      - Error
+      - Warning
+      - Informational
+      - None
+  - name: lintExcludeRules
+    displayName: Linter rules that are reported but never fail the build (comma-separated identifiers)
+    type: string
+    default: ''
+  - name: bootstrapManagementGroups
+    displayName: Create the dev and prod management groups if they don't exist
+    type: boolean
+    default: true
+  - name: parentManagementGroupId
+    displayName: Parent management group ID (leave empty for the tenant root group)
+    type: string
+    default: ''
+
+variables:
+  projectRoot: $(Build.SourcesDirectory)/azure-devops/epac-policy-linter-pipeline
+
+  # EPAC reads these environment variables
+  PAC_DEFINITIONS_FOLDER: $(projectRoot)/Definitions
+  PAC_OUTPUT_FOLDER: $(projectRoot)/Output
+
+  # Azure Resource Manager service connections. See README.md for the role each one needs.
+  bootstrapServiceConnection: sc-epac-bootstrap
+  planServiceConnection: sc-epac-plan
+  devServiceConnection: sc-epac-dev
+  prodServiceConnection: sc-epac-prod
+
+  devManagementGroupName: mg-epac-dev
+  prodManagementGroupName: mg-epac-prod
+
+  isPullRequest: $[eq(variables['Build.Reason'], 'PullRequest')]
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: Lint
+    displayName: Lint policy definitions
+    jobs:
+      - job: Lint
+        displayName: Azure Policy Linter
+        steps:
+          - template: templates/lint.yml
+            parameters:
+              projectRoot: $(projectRoot)
+              failOn: ${{ parameters.lintFailOn }}
+              excludeRules: ${{ parameters.lintExcludeRules }}
+
+  - stage: Bootstrap
+    displayName: Bootstrap management groups
+    dependsOn: Lint
+    condition: and(succeeded(), eq('${{ parameters.bootstrapManagementGroups }}', 'true'), ne(variables['Build.Reason'], 'PullRequest'))
+    jobs:
+      - job: ManagementGroups
+        displayName: Create mg-epac-dev and mg-epac-prod
+        steps:
+          - template: templates/bootstrap-management-groups.yml
+            parameters:
+              projectRoot: $(projectRoot)
+              serviceConnection: $(bootstrapServiceConnection)
+              parentManagementGroupId: ${{ parameters.parentManagementGroupId }}
+              devManagementGroupName: $(devManagementGroupName)
+              prodManagementGroupName: $(prodManagementGroupName)
+
+  - stage: PlanDev
+    displayName: Plan epac-dev
+    dependsOn:
+      - Lint
+      - Bootstrap
+    # Bootstrap is skipped on pull requests, so don't require it to have succeeded.
+    condition: and(not(failed()), not(canceled()))
+    jobs:
+      - job: Plan
+        displayName: Build deployment plans
+        steps:
+          - template: templates/plan.yml
+            parameters:
+              serviceConnection: $(planServiceConnection)
+              pacEnvironmentSelector: epac-dev
+
+  - stage: DeployDev
+    displayName: Deploy epac-dev
+    dependsOn: PlanDev
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+    variables:
+      PAC_INPUT_FOLDER: $(Pipeline.Workspace)/plans-epac-dev
+      deployPolicyChanges: $[ stageDependencies.PlanDev.Plan.outputs['Plan.deployPolicyChanges'] ]
+      deployRoleChanges: $[ stageDependencies.PlanDev.Plan.outputs['Plan.deployRoleChanges'] ]
+    jobs:
+      - deployment: DeployPolicy
+        displayName: Deploy policy changes
+        environment: epac-dev
+        condition: and(succeeded(), eq(variables['deployPolicyChanges'], 'yes'))
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - template: templates/deploy-policy.yml
+                  parameters:
+                    serviceConnection: $(devServiceConnection)
+                    pacEnvironmentSelector: epac-dev
+      - deployment: DeployRoles
+        displayName: Deploy role assignments
+        dependsOn: DeployPolicy
+        environment: epac-dev
+        condition: and(not(failed()), not(canceled()), eq(variables['deployRoleChanges'], 'yes'))
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - template: templates/deploy-roles.yml
+                  parameters:
+                    serviceConnection: $(devServiceConnection)
+                    pacEnvironmentSelector: epac-dev
+
+  - stage: PlanProd
+    displayName: Plan epac-prod
+    dependsOn: DeployDev
+    condition: and(not(failed()), not(canceled()), ne(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - job: Plan
+        displayName: Build deployment plans
+        steps:
+          - template: templates/plan.yml
+            parameters:
+              serviceConnection: $(planServiceConnection)
+              pacEnvironmentSelector: epac-prod
+
+  - stage: DeployProd
+    displayName: Deploy epac-prod
+    dependsOn: PlanProd
+    condition: succeeded()
+    variables:
+      PAC_INPUT_FOLDER: $(Pipeline.Workspace)/plans-epac-prod
+      deployPolicyChanges: $[ stageDependencies.PlanProd.Plan.outputs['Plan.deployPolicyChanges'] ]
+      deployRoleChanges: $[ stageDependencies.PlanProd.Plan.outputs['Plan.deployRoleChanges'] ]
+    jobs:
+      - deployment: DeployPolicy
+        displayName: Deploy policy changes
+        environment: epac-prod
+        condition: and(succeeded(), eq(variables['deployPolicyChanges'], 'yes'))
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - template: templates/deploy-policy.yml
+                  parameters:
+                    serviceConnection: $(prodServiceConnection)
+                    pacEnvironmentSelector: epac-prod
+      - deployment: DeployRoles
+        displayName: Deploy role assignments
+        dependsOn: DeployPolicy
+        environment: epac-prod
+        condition: and(not(failed()), not(canceled()), eq(variables['deployRoleChanges'], 'yes'))
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - template: templates/deploy-roles.yml
+                  parameters:
+                    serviceConnection: $(prodServiceConnection)
+                    pacEnvironmentSelector: epac-prod

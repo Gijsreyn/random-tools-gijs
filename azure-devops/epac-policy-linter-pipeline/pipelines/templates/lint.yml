@@ -1,0 +1,56 @@
+parameters:
+  - name: projectRoot
+    type: string
+    default: $(Build.SourcesDirectory)
+  - name: failOn
+    type: string
+    default: Warning
+    values:
+      - Error
+      - Warning
+      - Informational
+      - None
+  - name: excludeRules
+    displayName: Comma-separated rule identifiers that are reported but never fail the stage
+    type: string
+    default: ''
+  - name: definitionsPath
+    type: string
+    default: ''
+  - name: toolVersion
+    type: string
+    default: ''
+
+steps:
+  - checkout: self
+
+  - task: UseDotNet@2
+    displayName: Use .NET SDK 10.0
+    inputs:
+      packageType: sdk
+      version: 10.0.x
+
+  - pwsh: |
+      $definitionsPath = '${{ parameters.definitionsPath }}'
+      if (-not $definitionsPath) {
+          $definitionsPath = '${{ parameters.projectRoot }}/Definitions/policyDefinitions'
+      }
+      $arguments = @{
+          Path       = $definitionsPath
+          FailOn     = '${{ parameters.failOn }}'
+          OutputPath = '$(Build.ArtifactStagingDirectory)/lint/policy-lint-results.json'
+      }
+      if ('${{ parameters.excludeRules }}') {
+          $arguments.ExcludeRule = '${{ parameters.excludeRules }}' -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+      }
+      if ('${{ parameters.toolVersion }}') {
+          $arguments.ToolVersion = '${{ parameters.toolVersion }}'
+      }
+      ./scripts/Invoke-PolicyLinter.ps1 @arguments
+    displayName: Run Azure Policy Linter
+    workingDirectory: ${{ parameters.projectRoot }}
+
+  - publish: $(Build.ArtifactStagingDirectory)/lint
+    artifact: policy-lint-results
+    displayName: Publish lint results
+    condition: succeededOrFailed()

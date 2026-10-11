@@ -1,0 +1,36 @@
+parameters:
+  - name: serviceConnection
+    type: string
+  - name: pacEnvironmentSelector
+    type: string
+  - name: epacVersion
+    type: string
+    default: ''
+
+steps:
+  - checkout: self
+
+  - pwsh: |
+      $install = @{ Name = 'EnterprisePolicyAsCode'; Repository = 'PSGallery'; Scope = 'CurrentUser'; TrustRepository = $true; Quiet = $true }
+      if ('${{ parameters.epacVersion }}') {
+          $install.Version = '${{ parameters.epacVersion }}'
+      }
+      Install-PSResource @install
+      Get-Module -Name EnterprisePolicyAsCode -ListAvailable | Select-Object -First 1 Name, Version
+    displayName: Install EnterprisePolicyAsCode module
+
+  - task: AzurePowerShell@5
+    name: Plan
+    displayName: Build deployment plans for ${{ parameters.pacEnvironmentSelector }}
+    inputs:
+      azureSubscription: ${{ parameters.serviceConnection }}
+      azurePowerShellVersion: LatestVersion
+      pwsh: true
+      ScriptType: InlineScript
+      Inline: |
+        Build-DeploymentPlans -PacEnvironmentSelector '${{ parameters.pacEnvironmentSelector }}' -DevOpsType ado -InformationAction Continue
+
+  - publish: $(PAC_OUTPUT_FOLDER)
+    artifact: plans-${{ parameters.pacEnvironmentSelector }}
+    displayName: Publish deployment plans
+    condition: and(succeeded(), or(eq(variables['Plan.deployPolicyChanges'], 'yes'), eq(variables['Plan.deployRoleChanges'], 'yes')))
