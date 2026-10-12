@@ -1,6 +1,6 @@
 # EPAC with an Azure Policy Linter gate
 
-Walkthrough: _link to the blog post_
+Walkthrough: [How to lint Azure Policy Definitions with EPAC and Azure Policy Linter](https://www.idontlikeai.dev/how-to-lint-azure-policy-definitions-in-azure-devops-with-epac-and-azure-policy-linter/)
 
 A small, runnable Enterprise Policy as Code (EPAC) sample with the [Azure Policy Linter](https://github.com/Azure/azure-policy-linter) in front of it. The Azure Pipeline lints every custom policy definition, creates two management groups (one for dev, one for prod), and deploys the definitions and assignments to each with EPAC.
 
